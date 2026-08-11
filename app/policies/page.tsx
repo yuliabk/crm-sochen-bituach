@@ -1,37 +1,220 @@
-import { createClient } from "@/lib/supabase/server";
-import type { Policy } from "@/lib/types";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { useEffect, useState } from "react";
+import type { Client, InsuranceBranch, Policy, PolicyStatus } from "@/lib/types";
 
-export default async function PoliciesPage() {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("policies")
-    .select("*, clients(full_name)")
-    .order("renewal_date", { ascending: true });
+const BRANCHES: InsuranceBranch[] = [
+  "car",
+  "home",
+  "health",
+  "life",
+  "pension",
+  "other",
+];
+const STATUSES: PolicyStatus[] = [
+  "active",
+  "pending_renewal",
+  "expired",
+  "cancelled",
+];
+
+type PolicyWithClient = Policy & { clients: { full_name: string } | null };
+
+const emptyForm = {
+  client_id: "",
+  insurance_company: "",
+  branch: "car" as InsuranceBranch,
+  start_date: "",
+  renewal_date: "",
+  monthly_premium: "",
+};
+
+export default function PoliciesPage() {
+  const [policies, setPolicies] = useState<PolicyWithClient[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState(emptyForm);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function loadAll() {
+    setLoading(true);
+    const [policiesRes, clientsRes] = await Promise.all([
+      fetch("/api/policies"),
+      fetch("/api/clients"),
+    ]);
+    const policiesJson = await policiesRes.json();
+    const clientsJson = await clientsRes.json();
+    if (!policiesRes.ok) {
+      setError(policiesJson.error ?? "שגיאה בטעינת פוליסות");
+    } else {
+      setPolicies(policiesJson.data);
+      setError(null);
+    }
+    if (clientsRes.ok) setClients(clientsJson.data);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    loadAll();
+  }, []);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    const res = await fetch("/api/policies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...form,
+        monthly_premium: Number(form.monthly_premium) || 0,
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      setError(json.error ?? "שגיאה בהוספת פוליסה");
+    } else {
+      setForm(emptyForm);
+      await loadAll();
+    }
+    setSubmitting(false);
+  }
+
+  async function updateStatus(id: string, status: PolicyStatus) {
+    const res = await fetch(`/api/policies/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (res.ok) await loadAll();
+  }
+
+  async function deletePolicy(id: string) {
+    if (!confirm("למחוק את הפוליסה?")) return;
+    const res = await fetch(`/api/policies/${id}`, { method: "DELETE" });
+    if (res.ok) await loadAll();
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <h1 className="text-2xl font-bold">פוליסות</h1>
-      {error && <p className="text-sm text-red-600">{error.message}</p>}
-      <ul className="divide-y rounded-lg border bg-white">
-        {(
-          (data ?? []) as (Policy & { clients: { full_name: string } | null })[]
-        ).map((policy) => (
-          <li key={policy.id} className="flex justify-between px-4 py-3">
-            <span>
-              {policy.clients?.full_name ?? "לקוח"} — {policy.insurance_company} (
-              {policy.branch})
-            </span>
-            <span className="text-sm text-gray-500">
-              חידוש: {policy.renewal_date} · {policy.status}
-            </span>
-          </li>
-        ))}
-        {(data ?? []).length === 0 && !error && (
-          <li className="px-4 py-3 text-sm text-gray-500">אין פוליסות עדיין.</li>
-        )}
-      </ul>
+
+      <form
+        onSubmit={handleSubmit}
+        className="flex flex-wrap gap-3 rounded-lg border bg-white p-4"
+      >
+        <select
+          required
+          className="rounded border px-3 py-2"
+          value={form.client_id}
+          onChange={(e) => setForm({ ...form, client_id: e.target.value })}
+        >
+          <option value="">בחר לקוח</option>
+          {clients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.full_name}
+            </option>
+          ))}
+        </select>
+        <input
+          required
+          placeholder="חברת ביטוח"
+          className="flex-1 rounded border px-3 py-2"
+          value={form.insurance_company}
+          onChange={(e) =>
+            setForm({ ...form, insurance_company: e.target.value })
+          }
+        />
+        <select
+          className="rounded border px-3 py-2"
+          value={form.branch}
+          onChange={(e) =>
+            setForm({ ...form, branch: e.target.value as InsuranceBranch })
+          }
+        >
+          {BRANCHES.map((b) => (
+            <option key={b} value={b}>
+              {b}
+            </option>
+          ))}
+        </select>
+        <input
+          required
+          type="date"
+          className="rounded border px-3 py-2"
+          value={form.start_date}
+          onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+        />
+        <input
+          required
+          type="date"
+          className="rounded border px-3 py-2"
+          value={form.renewal_date}
+          onChange={(e) => setForm({ ...form, renewal_date: e.target.value })}
+        />
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="פרמיה חודשית"
+          className="w-32 rounded border px-3 py-2"
+          value={form.monthly_premium}
+          onChange={(e) =>
+            setForm({ ...form, monthly_premium: e.target.value })
+          }
+        />
+        <button
+          type="submit"
+          disabled={submitting}
+          className="rounded bg-gray-900 px-4 py-2 text-white disabled:opacity-50"
+        >
+          הוסף פוליסה
+        </button>
+      </form>
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      {loading ? (
+        <p className="text-sm text-gray-500">טוען...</p>
+      ) : (
+        <ul className="divide-y rounded-lg border bg-white">
+          {policies.map((policy) => (
+            <li
+              key={policy.id}
+              className="flex flex-wrap items-center justify-between gap-2 px-4 py-3"
+            >
+              <span>
+                {policy.clients?.full_name ?? "לקוח"} — {policy.insurance_company} (
+                {policy.branch})
+              </span>
+              <div className="flex items-center gap-3 text-sm text-gray-500">
+                <span>חידוש: {policy.renewal_date}</span>
+                <select
+                  className="rounded border px-2 py-1"
+                  value={policy.status}
+                  onChange={(e) =>
+                    updateStatus(policy.id, e.target.value as PolicyStatus)
+                  }
+                >
+                  {STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => deletePolicy(policy.id)}
+                  className="text-red-600 hover:underline"
+                >
+                  מחק
+                </button>
+              </div>
+            </li>
+          ))}
+          {policies.length === 0 && (
+            <li className="px-4 py-3 text-sm text-gray-500">אין פוליסות עדיין.</li>
+          )}
+        </ul>
+      )}
     </div>
   );
 }

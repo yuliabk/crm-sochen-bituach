@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Client } from "@/lib/types";
+import type { Client, ClientStatus } from "@/lib/types";
+
+const STATUSES: ClientStatus[] = ["active", "lead", "inactive"];
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
@@ -43,6 +45,22 @@ export default function ClientsPage() {
       await loadClients();
     }
     setSubmitting(false);
+  }
+
+  async function updateStatus(id: string, status: ClientStatus) {
+    const res = await fetch(`/api/clients/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (res.ok) await loadClients();
+  }
+
+  async function deleteClient(id: string) {
+    if (!confirm("למחוק את הלקוח? פעולה זו תמחק גם את הפוליסות והמשימות שלו."))
+      return;
+    const res = await fetch(`/api/clients/${id}`, { method: "DELETE" });
+    if (res.ok) await loadClients();
   }
 
   return (
@@ -88,11 +106,33 @@ export default function ClientsPage() {
       ) : (
         <ul className="divide-y rounded-lg border bg-white">
           {clients.map((client) => (
-            <li key={client.id} className="flex justify-between px-4 py-3">
+            <li
+              key={client.id}
+              className="flex flex-wrap items-center justify-between gap-2 px-4 py-3"
+            >
               <span>{client.full_name}</span>
-              <span className="text-sm text-gray-500">
-                {client.phone} · {client.status}
-              </span>
+              <div className="flex items-center gap-3 text-sm text-gray-500">
+                <span>{client.phone}</span>
+                <select
+                  className="rounded border px-2 py-1"
+                  value={client.status}
+                  onChange={(e) =>
+                    updateStatus(client.id, e.target.value as ClientStatus)
+                  }
+                >
+                  {STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => deleteClient(client.id)}
+                  className="text-red-600 hover:underline"
+                >
+                  מחק
+                </button>
+              </div>
             </li>
           ))}
           {clients.length === 0 && (
