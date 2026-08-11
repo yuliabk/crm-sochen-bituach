@@ -23,6 +23,21 @@ const emptyForm = {
   notes: "",
 };
 
+type EditForm = Pick<
+  AgentTask,
+  "task_type" | "due_date" | "priority" | "status" | "notes"
+>;
+
+function toEditForm(task: AgentTask): EditForm {
+  return {
+    task_type: task.task_type,
+    due_date: task.due_date,
+    priority: task.priority,
+    status: task.status,
+    notes: task.notes,
+  };
+}
+
 export default function TasksPage() {
   const [tasks, setTasks] = useState<TaskWithClient[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -30,6 +45,10 @@ export default function TasksPage() {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<EditForm | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   async function loadAll() {
     setLoading(true);
@@ -75,13 +94,36 @@ export default function TasksPage() {
     setSubmitting(false);
   }
 
-  async function updateStatus(id: string, status: TaskStatus) {
+  function startEdit(task: AgentTask) {
+    setEditingId(task.id);
+    setEditForm(toEditForm(task));
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditForm(null);
+  }
+
+  async function saveEdit(id: string) {
+    if (!editForm) return;
+    setSavingEdit(true);
     const res = await fetch(`/api/tasks/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({
+        ...editForm,
+        due_date: editForm.due_date || null,
+        notes: editForm.notes || null,
+      }),
     });
-    if (res.ok) await loadAll();
+    setSavingEdit(false);
+    if (res.ok) {
+      cancelEdit();
+      await loadAll();
+    } else {
+      const json = await res.json();
+      setError(json.error ?? "שגיאה בעדכון משימה");
+    }
   }
 
   async function deleteTask(id: string) {
@@ -163,36 +205,108 @@ export default function TasksPage() {
       ) : (
         <ul className="divide-y rounded-lg border bg-white">
           {tasks.map((task) => (
-            <li
-              key={task.id}
-              className="flex flex-wrap items-center justify-between gap-2 px-4 py-3"
-            >
-              <span>
-                {task.clients?.full_name ?? "כללי"} — {task.task_type}
-              </span>
-              <div className="flex items-center gap-3 text-sm text-gray-500">
-                <span>{task.due_date ?? "ללא תאריך"}</span>
-                <span>{task.priority}</span>
-                <select
-                  className="rounded border px-2 py-1"
-                  value={task.status}
-                  onChange={(e) =>
-                    updateStatus(task.id, e.target.value as TaskStatus)
-                  }
-                >
-                  {STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => deleteTask(task.id)}
-                  className="text-red-600 hover:underline"
-                >
-                  מחק
-                </button>
-              </div>
+            <li key={task.id} className="px-4 py-3">
+              {editingId === task.id && editForm ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    className="rounded border px-2 py-1"
+                    value={editForm.task_type}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        task_type: e.target.value as TaskType,
+                      })
+                    }
+                  >
+                    {TASK_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="date"
+                    className="rounded border px-2 py-1"
+                    value={editForm.due_date ?? ""}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, due_date: e.target.value })
+                    }
+                  />
+                  <select
+                    className="rounded border px-2 py-1"
+                    value={editForm.priority}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        priority: e.target.value as TaskPriority,
+                      })
+                    }
+                  >
+                    {PRIORITIES.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="rounded border px-2 py-1"
+                    value={editForm.status}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        status: e.target.value as TaskStatus,
+                      })
+                    }
+                  >
+                    {STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="min-w-[10rem] flex-1 rounded border px-2 py-1"
+                    placeholder="הערות"
+                    value={editForm.notes ?? ""}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, notes: e.target.value })
+                    }
+                  />
+                  <button
+                    disabled={savingEdit}
+                    onClick={() => saveEdit(task.id)}
+                    className="rounded bg-gray-900 px-3 py-1 text-white disabled:opacity-50"
+                  >
+                    שמור
+                  </button>
+                  <button onClick={cancelEdit} className="text-sm text-gray-500">
+                    ביטול
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>
+                    {task.clients?.full_name ?? "כללי"} — {task.task_type}
+                  </span>
+                  <div className="flex items-center gap-3 text-sm text-gray-500">
+                    <span>{task.due_date ?? "ללא תאריך"}</span>
+                    <span>{task.priority}</span>
+                    <span>{task.status}</span>
+                    <button
+                      onClick={() => startEdit(task)}
+                      className="text-blue-600 hover:underline"
+                    >
+                      ערוך
+                    </button>
+                    <button
+                      onClick={() => deleteTask(task.id)}
+                      className="text-red-600 hover:underline"
+                    >
+                      מחק
+                    </button>
+                  </div>
+                </div>
+              )}
             </li>
           ))}
           {tasks.length === 0 && (

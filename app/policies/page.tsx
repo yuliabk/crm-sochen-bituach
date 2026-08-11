@@ -29,6 +29,22 @@ const emptyForm = {
   monthly_premium: "",
 };
 
+type EditForm = Pick<
+  Policy,
+  "insurance_company" | "branch" | "start_date" | "renewal_date" | "monthly_premium" | "status"
+>;
+
+function toEditForm(policy: Policy): EditForm {
+  return {
+    insurance_company: policy.insurance_company,
+    branch: policy.branch,
+    start_date: policy.start_date,
+    renewal_date: policy.renewal_date,
+    monthly_premium: policy.monthly_premium,
+    status: policy.status,
+  };
+}
+
 export default function PoliciesPage() {
   const [policies, setPolicies] = useState<PolicyWithClient[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -36,6 +52,10 @@ export default function PoliciesPage() {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<EditForm | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   async function loadAll() {
     setLoading(true);
@@ -80,13 +100,35 @@ export default function PoliciesPage() {
     setSubmitting(false);
   }
 
-  async function updateStatus(id: string, status: PolicyStatus) {
+  function startEdit(policy: Policy) {
+    setEditingId(policy.id);
+    setEditForm(toEditForm(policy));
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditForm(null);
+  }
+
+  async function saveEdit(id: string) {
+    if (!editForm) return;
+    setSavingEdit(true);
     const res = await fetch(`/api/policies/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({
+        ...editForm,
+        monthly_premium: Number(editForm.monthly_premium) || 0,
+      }),
     });
-    if (res.ok) await loadAll();
+    setSavingEdit(false);
+    if (res.ok) {
+      cancelEdit();
+      await loadAll();
+    } else {
+      const json = await res.json();
+      setError(json.error ?? "שגיאה בעדכון פוליסה");
+    }
   }
 
   async function deletePolicy(id: string) {
@@ -178,36 +220,113 @@ export default function PoliciesPage() {
       ) : (
         <ul className="divide-y rounded-lg border bg-white">
           {policies.map((policy) => (
-            <li
-              key={policy.id}
-              className="flex flex-wrap items-center justify-between gap-2 px-4 py-3"
-            >
-              <span>
-                {policy.clients?.full_name ?? "לקוח"} — {policy.insurance_company} (
-                {policy.branch})
-              </span>
-              <div className="flex items-center gap-3 text-sm text-gray-500">
-                <span>חידוש: {policy.renewal_date}</span>
-                <select
-                  className="rounded border px-2 py-1"
-                  value={policy.status}
-                  onChange={(e) =>
-                    updateStatus(policy.id, e.target.value as PolicyStatus)
-                  }
-                >
-                  {STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => deletePolicy(policy.id)}
-                  className="text-red-600 hover:underline"
-                >
-                  מחק
-                </button>
-              </div>
+            <li key={policy.id} className="px-4 py-3">
+              {editingId === policy.id && editForm ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    className="flex-1 rounded border px-2 py-1"
+                    placeholder="חברת ביטוח"
+                    value={editForm.insurance_company}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, insurance_company: e.target.value })
+                    }
+                  />
+                  <select
+                    className="rounded border px-2 py-1"
+                    value={editForm.branch}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        branch: e.target.value as InsuranceBranch,
+                      })
+                    }
+                  >
+                    {BRANCHES.map((b) => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="date"
+                    className="rounded border px-2 py-1"
+                    value={editForm.start_date}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, start_date: e.target.value })
+                    }
+                  />
+                  <input
+                    type="date"
+                    className="rounded border px-2 py-1"
+                    value={editForm.renewal_date}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, renewal_date: e.target.value })
+                    }
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-28 rounded border px-2 py-1"
+                    value={editForm.monthly_premium}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        monthly_premium: Number(e.target.value),
+                      })
+                    }
+                  />
+                  <select
+                    className="rounded border px-2 py-1"
+                    value={editForm.status}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        status: e.target.value as PolicyStatus,
+                      })
+                    }
+                  >
+                    {STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    disabled={savingEdit}
+                    onClick={() => saveEdit(policy.id)}
+                    className="rounded bg-gray-900 px-3 py-1 text-white disabled:opacity-50"
+                  >
+                    שמור
+                  </button>
+                  <button onClick={cancelEdit} className="text-sm text-gray-500">
+                    ביטול
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>
+                    {policy.clients?.full_name ?? "לקוח"} — {policy.insurance_company} (
+                    {policy.branch})
+                  </span>
+                  <div className="flex items-center gap-3 text-sm text-gray-500">
+                    <span>חידוש: {policy.renewal_date}</span>
+                    <span>{policy.status}</span>
+                    <button
+                      onClick={() => startEdit(policy)}
+                      className="text-blue-600 hover:underline"
+                    >
+                      ערוך
+                    </button>
+                    <button
+                      onClick={() => deletePolicy(policy.id)}
+                      className="text-red-600 hover:underline"
+                    >
+                      מחק
+                    </button>
+                  </div>
+                </div>
+              )}
             </li>
           ))}
           {policies.length === 0 && (

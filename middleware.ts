@@ -1,7 +1,12 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login"];
+// Accessible without a session.
+const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password", "/auth"];
+// Redirect to "/" if the visitor already has a session (a logged-in agent
+// has no reason to see the login form again). Excludes /reset-password and
+// /auth: those are visited via a recovery-link session too.
+const AUTH_ONLY_PATHS = ["/login", "/forgot-password"];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } });
@@ -33,6 +38,9 @@ export async function middleware(request: NextRequest) {
   const isPublicPath = PUBLIC_PATHS.some((path) =>
     request.nextUrl.pathname.startsWith(path)
   );
+  const isAuthOnlyPath = AUTH_ONLY_PATHS.some((path) =>
+    request.nextUrl.pathname.startsWith(path)
+  );
 
   if (!user && !isPublicPath) {
     const loginUrl = new URL("/login", request.url);
@@ -40,7 +48,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (user && isPublicPath) {
+  if (user && isAuthOnlyPath) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 

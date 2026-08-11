@@ -1,9 +1,34 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Client, ClientStatus } from "@/lib/types";
+import type { Client, ClientStatus, ChannelPreference } from "@/lib/types";
 
 const STATUSES: ClientStatus[] = ["active", "lead", "inactive"];
+const CHANNEL_PREFS: ChannelPreference[] = ["auto", "whatsapp_only", "sms_only"];
+
+interface EditForm {
+  full_name: string;
+  phone: string;
+  email: string;
+  national_id: string;
+  birth_date: string;
+  channel_preference: ChannelPreference;
+  status: ClientStatus;
+  notes: string;
+}
+
+function toEditForm(client: Client): EditForm {
+  return {
+    full_name: client.full_name,
+    phone: client.phone,
+    email: client.email ?? "",
+    national_id: client.national_id ?? "",
+    birth_date: client.birth_date ?? "",
+    channel_preference: client.channel_preference,
+    status: client.status,
+    notes: client.notes ?? "",
+  };
+}
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
@@ -11,6 +36,15 @@ export default function ClientsPage() {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ full_name: "", phone: "", email: "" });
   const [submitting, setSubmitting] = useState(false);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<EditForm | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const [messagingId, setMessagingId] = useState<string | null>(null);
+  const [messageText, setMessageText] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [messageResult, setMessageResult] = useState<string | null>(null);
 
   async function loadClients() {
     setLoading(true);
@@ -47,13 +81,38 @@ export default function ClientsPage() {
     setSubmitting(false);
   }
 
-  async function updateStatus(id: string, status: ClientStatus) {
+  function startEdit(client: Client) {
+    setEditingId(client.id);
+    setEditForm(toEditForm(client));
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditForm(null);
+  }
+
+  async function saveEdit(id: string) {
+    if (!editForm) return;
+    setSavingEdit(true);
     const res = await fetch(`/api/clients/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({
+        ...editForm,
+        email: editForm.email || null,
+        national_id: editForm.national_id || null,
+        birth_date: editForm.birth_date || null,
+        notes: editForm.notes || null,
+      }),
     });
-    if (res.ok) await loadClients();
+    setSavingEdit(false);
+    if (res.ok) {
+      cancelEdit();
+      await loadClients();
+    } else {
+      const json = await res.json();
+      setError(json.error ?? "שגיאה בעדכון לקוח");
+    }
   }
 
   async function deleteClient(id: string) {
@@ -61,6 +120,34 @@ export default function ClientsPage() {
       return;
     const res = await fetch(`/api/clients/${id}`, { method: "DELETE" });
     if (res.ok) await loadClients();
+  }
+
+  function startMessage(id: string) {
+    setMessagingId(id);
+    setMessageText("");
+    setMessageResult(null);
+  }
+
+  async function sendMessage(id: string) {
+    if (!messageText.trim()) return;
+    setSendingMessage(true);
+    setMessageResult(null);
+    const res = await fetch("/api/messages/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ client_id: id, message: messageText }),
+    });
+    const json = await res.json();
+    setSendingMessage(false);
+    if (!res.ok) {
+      setMessageResult(json.error ?? "שגיאה בשליחה");
+      return;
+    }
+    setMessageResult(
+      json.data.status === "sent"
+        ? `נשלח בהצלחה בערוץ ${json.data.channel}`
+        : `השליחה נכשלה: ${json.data.error ?? ""}`
+    );
   }
 
   return (
@@ -106,33 +193,154 @@ export default function ClientsPage() {
       ) : (
         <ul className="divide-y rounded-lg border bg-white">
           {clients.map((client) => (
-            <li
-              key={client.id}
-              className="flex flex-wrap items-center justify-between gap-2 px-4 py-3"
-            >
-              <span>{client.full_name}</span>
-              <div className="flex items-center gap-3 text-sm text-gray-500">
-                <span>{client.phone}</span>
-                <select
-                  className="rounded border px-2 py-1"
-                  value={client.status}
-                  onChange={(e) =>
-                    updateStatus(client.id, e.target.value as ClientStatus)
-                  }
-                >
-                  {STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => deleteClient(client.id)}
-                  className="text-red-600 hover:underline"
-                >
-                  מחק
-                </button>
-              </div>
+            <li key={client.id} className="space-y-3 px-4 py-3">
+              {editingId === client.id && editForm ? (
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    className="flex-1 rounded border px-2 py-1"
+                    placeholder="שם מלא"
+                    value={editForm.full_name}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, full_name: e.target.value })
+                    }
+                  />
+                  <input
+                    className="flex-1 rounded border px-2 py-1"
+                    placeholder="טלפון"
+                    value={editForm.phone}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, phone: e.target.value })
+                    }
+                  />
+                  <input
+                    className="flex-1 rounded border px-2 py-1"
+                    placeholder="אימייל"
+                    value={editForm.email}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, email: e.target.value })
+                    }
+                  />
+                  <input
+                    className="w-32 rounded border px-2 py-1"
+                    placeholder="ת&quot;ז"
+                    value={editForm.national_id}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, national_id: e.target.value })
+                    }
+                  />
+                  <input
+                    type="date"
+                    className="rounded border px-2 py-1"
+                    value={editForm.birth_date ?? ""}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, birth_date: e.target.value })
+                    }
+                  />
+                  <select
+                    className="rounded border px-2 py-1"
+                    value={editForm.channel_preference}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        channel_preference: e.target.value as ChannelPreference,
+                      })
+                    }
+                  >
+                    {CHANNEL_PREFS.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="rounded border px-2 py-1"
+                    value={editForm.status}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        status: e.target.value as ClientStatus,
+                      })
+                    }
+                  >
+                    {STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="min-w-[10rem] flex-1 rounded border px-2 py-1"
+                    placeholder="הערות"
+                    value={editForm.notes ?? ""}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, notes: e.target.value })
+                    }
+                  />
+                  <button
+                    disabled={savingEdit}
+                    onClick={() => saveEdit(client.id)}
+                    className="rounded bg-gray-900 px-3 py-1 text-white disabled:opacity-50"
+                  >
+                    שמור
+                  </button>
+                  <button onClick={cancelEdit} className="text-sm text-gray-500">
+                    ביטול
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>{client.full_name}</span>
+                  <div className="flex items-center gap-3 text-sm text-gray-500">
+                    <span>{client.phone}</span>
+                    <span>{client.status}</span>
+                    <button
+                      onClick={() => startEdit(client)}
+                      className="text-blue-600 hover:underline"
+                    >
+                      ערוך
+                    </button>
+                    <button
+                      onClick={() => startMessage(client.id)}
+                      className="text-blue-600 hover:underline"
+                    >
+                      שלח הודעה
+                    </button>
+                    <button
+                      onClick={() => deleteClient(client.id)}
+                      className="text-red-600 hover:underline"
+                    >
+                      מחק
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {messagingId === client.id && (
+                <div className="flex flex-wrap items-center gap-2 rounded border bg-gray-50 p-2">
+                  <input
+                    className="flex-1 rounded border px-2 py-1"
+                    placeholder="תוכן ההודעה (WhatsApp, נופל אוטומטית ל-SMS)"
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                  />
+                  <button
+                    disabled={sendingMessage}
+                    onClick={() => sendMessage(client.id)}
+                    className="rounded bg-gray-900 px-3 py-1 text-white disabled:opacity-50"
+                  >
+                    שלח
+                  </button>
+                  <button
+                    onClick={() => setMessagingId(null)}
+                    className="text-sm text-gray-500"
+                  >
+                    סגור
+                  </button>
+                  {messageResult && (
+                    <span className="text-sm text-gray-600">{messageResult}</span>
+                  )}
+                </div>
+              )}
             </li>
           ))}
           {clients.length === 0 && (

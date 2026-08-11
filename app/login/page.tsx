@@ -91,12 +91,19 @@ function LoginForm() {
         </button>
       </form>
 
-      <button
-        className="text-sm text-gray-600 hover:underline"
-        onClick={() => setMode(mode === "login" ? "signup" : "login")}
-      >
-        {mode === "login" ? "סוכן חדש? הרשמה" : "יש לך כבר חשבון? התחבר"}
-      </button>
+      <div className="flex items-center justify-between">
+        <button
+          className="text-sm text-gray-600 hover:underline"
+          onClick={() => setMode(mode === "login" ? "signup" : "login")}
+        >
+          {mode === "login" ? "סוכן חדש? הרשמה" : "יש לך כבר חשבון? התחבר"}
+        </button>
+        {mode === "login" && (
+          <a href="/forgot-password" className="text-sm text-gray-600 hover:underline">
+            שכחת סיסמה?
+          </a>
+        )}
+      </div>
     </div>
   );
 }
