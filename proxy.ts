@@ -8,7 +8,7 @@ const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password", "/auth"];
 // /auth: those are visited via a recovery-link session too.
 const AUTH_ONLY_PATHS = ["/login", "/forgot-password"];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } });
 
   const supabase = createServerClient(

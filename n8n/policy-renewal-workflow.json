@@ -37,13 +37,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.WHATSAPP_API_URL}}/sendMessage",
+        "url": "=https://api.green-api.com/waInstance{{$env.GREEN_API_INSTANCE_ID}}/sendMessage/{{$env.GREEN_API_TOKEN}}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
-            { "name": "phone", "value": "={{$json.phone}}" },
+            { "name": "chatId", "value": "={{'972' + $json.phone.replace(/\\D/g, '').replace(/^0/, '') + '@c.us'}}" },
             {
               "name": "message",
               "value": "שלום {{$json.full_name}}, הפוליסה שלך עומדת להתחדש בתאריך {{$json.renewal_date}}. נשמח לעדכן אותך בפרטים."
@@ -59,7 +59,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.SMS_API_URL}}/send",
+        "url": "={{$env.SMS_PROVIDER_API_URL}}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,

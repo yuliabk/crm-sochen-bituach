@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import "./globals.css";
 import { createClient } from "@/lib/supabase/server";
 import { SignOutButton } from "./components/SignOutButton";
@@ -13,7 +14,7 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -25,18 +26,18 @@ export default async function RootLayout({
           <nav className="border-b bg-white px-6 py-4 shadow-sm">
             <div className="mx-auto flex max-w-5xl items-center gap-6">
               <span className="text-lg font-bold">CRM סוכני ביטוח</span>
-              <a href="/" className="text-sm hover:underline">
+              <Link href="/" className="text-sm hover:underline">
                 דשבורד
-              </a>
-              <a href="/clients" className="text-sm hover:underline">
+              </Link>
+              <Link href="/clients" className="text-sm hover:underline">
                 לקוחות
-              </a>
-              <a href="/policies" className="text-sm hover:underline">
+              </Link>
+              <Link href="/policies" className="text-sm hover:underline">
                 פוליסות
-              </a>
-              <a href="/tasks" className="text-sm hover:underline">
+              </Link>
+              <Link href="/tasks" className="text-sm hover:underline">
                 משימות
-              </a>
+              </Link>
               <span className="flex-1" />
               <span className="text-sm text-gray-500">{user.email}</span>
               <SignOutButton />

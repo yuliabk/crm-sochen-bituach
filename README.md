@@ -25,11 +25,12 @@ SMS2000). המפרט המלא נמצא במסמכי האפיון המקוריי�
 supabase/migrations/
   0001_init.sql                      # סכמת בסיס הנתונים + מדיניות RLS
   0002_agent_signup_trigger.sql      # יצירת שורת agents אוטומטית בהרשמה
+  0003_audit_logs.sql                # יומן ביקורת מלא + אכיפת קשרי multi-tenant
 supabase/seed.sql                    # נתוני דמה לבדיקות (ראו הוראות בקובץ)
 scripts/
   import_clients_policies.py         # ייבוא CSV/Excel מרואטו/שורנס ל-Supabase
   requirements.txt                   # תלויות Python
-middleware.ts                        # הגנת נתיבים + רענון session של Supabase Auth
+proxy.ts                             # הגנת נתיבים + רענון session של Supabase Auth
 app/                                 # Next.js App Router
   login/page.tsx                     # התחברות / הרשמת סוכן
   forgot-password/page.tsx           # בקשת קישור לאיפוס סיסמה
@@ -56,11 +57,15 @@ n8n/                                 # שלדי workflow לייבוא ל-n8n
 
 ## מסד הנתונים
 
-הטבלאות: `agents`, `clients`, `policies`, `tasks`, `communication_logs`. כל
+הטבלאות: `agents`, `clients`, `policies`, `tasks`, `communication_logs`,
+`audit_logs`. כל
 טבלה (מלבד `agents`) מכילה `agent_id` ומוגנת ב-RLS כך שסוכן רואה ומעדכן רק
 את הנתונים המשויכים אליו — שכבת multi-tenancy מעל הסכמה הבסיסית, כדי
 שהמערכת תתמוך בכמה סוכנים בעתיד ולא רק בסוכן יחיד. `communication_logs`
-הוא append-only (אין מדיניות update/delete) לצורך יומן ביקורת. הרשמת סוכן
+ו-`audit_logs` הן append-only (אין מדיניות update/delete). יומן הביקורת
+מתעד צפיות דרך ה-API והדשבורד, ו-trigger-ים במסד מתעדים כל הוספה, עדכון
+ומחיקה של לקוח, פוליסה או משימה. אילוץ מורכב במסד מונע קישור פוליסה או
+משימה ללקוח של סוכן אחר. הרשמת סוכן
 חדש (Supabase Auth) יוצרת אוטומטית שורה תואמת ב-`agents` דרך trigger על
 `auth.users`.
 
@@ -71,6 +76,7 @@ supabase db push
 # או, מול פרויקט מרוחק:
 psql "$DATABASE_URL" -f supabase/migrations/0001_init.sql
 psql "$DATABASE_URL" -f supabase/migrations/0002_agent_signup_trigger.sql
+psql "$DATABASE_URL" -f supabase/migrations/0003_audit_logs.sql
 ```
 
 להטענת נתוני דמה לבדיקות, ראו את ההוראות בראש `supabase/seed.sql` (דורש
@@ -99,7 +105,7 @@ python scripts/import_clients_policies.py \
 `/login` מאפשר הרשמה והתחברות עם אימייל/סיסמה (Supabase Auth).
 `/forgot-password` שולח קישור איפוס, ו-`/auth/confirm` (route handler)
 מממש את חילופי ה-PKCE code מהאימייל להפעלת session לפני שהמשתמש מגיע
-ל-`/reset-password`. כל שאר הנתיבים מוגנים ב-`middleware.ts` ומפנים
+ל-`/reset-password`. כל שאר הנתיבים מוגנים ב-`proxy.ts` ומפנים
 אוטומטית ל-`/login` למשתמש לא מחובר.
 
 ## תקשורת (WhatsApp / SMS)
@@ -137,6 +143,7 @@ container מבודדת ללא גישה למפתחות/פרויקטים אמית�
 ספק SMS, OpenAI/Gemini, או מופע n8n. מה שכן אומת:
 
 - `npm run build` ו-`npm run lint` — מקומפל ועובר type-check נקי.
+- `npm audit` — ללא חולשות ידועות בחבילות המותקנות.
 - תקינות JSON של קובצי ה-n8n ושל `.devcontainer/devcontainer.json`.
 - תקינות תחבירית (syntax) של סקריפט הפייתון.
 - לוגיקת הקוד נבדקה ידנית (code review), לא הרצה חיה.

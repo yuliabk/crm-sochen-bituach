@@ -10,7 +10,7 @@ import { extractStructuredData } from "@/lib/ai/extract";
  * / GPT-4o לחילוץ JSON מובנה".
  */
 export async function POST(request: NextRequest) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -28,6 +28,12 @@ export async function POST(request: NextRequest) {
       const textField = formData.get("text");
 
       if (audio instanceof Blob) {
+        if (audio.size > 25 * 1024 * 1024) {
+          return NextResponse.json(
+            { error: "audio file exceeds the 25 MB limit" },
+            { status: 413 }
+          );
+        }
         text = await transcribeAudio(audio, "voice-note.webm");
       } else if (typeof textField === "string") {
         text = textField;
@@ -44,11 +50,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (text.length > 50_000) {
+      return NextResponse.json(
+        { error: "text exceeds the 50,000 character limit" },
+        { status: 413 }
+      );
+    }
+
     const extracted = await extractStructuredData(text);
     return NextResponse.json({ data: { transcript: text, extracted } });
   } catch (err) {
+    console.error("AI note parsing failed", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : String(err) },
+      { error: "AI processing failed" },
       { status: 502 }
     );
   }

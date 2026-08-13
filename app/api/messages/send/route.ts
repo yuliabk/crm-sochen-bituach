@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { sendToClient } from "@/lib/messaging";
 
 export async function POST(request: NextRequest) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -18,6 +18,18 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
+  if (typeof client_id !== "string" || typeof message !== "string") {
+    return NextResponse.json(
+      { error: "client_id and message must be strings" },
+      { status: 400 }
+    );
+  }
+  if (message.length > 4_000) {
+    return NextResponse.json(
+      { error: "message exceeds the 4,000 character limit" },
+      { status: 413 }
+    );
+  }
 
   const { data: client, error: clientError } = await supabase
     .from("clients")
@@ -29,7 +41,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "client not found" }, { status: 404 });
   }
 
-  const result = await sendToClient(supabase, user.id, client, message);
-
-  return NextResponse.json({ data: result });
+  try {
+    const result = await sendToClient(supabase, user.id, client, message);
+    return NextResponse.json({ data: result });
+  } catch (error) {
+    console.error("Message delivery failed", error);
+    return NextResponse.json({ error: "message delivery failed" }, { status: 502 });
+  }
 }

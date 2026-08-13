@@ -22,20 +22,35 @@ export async function sendToClient(
   message: string
 ): Promise<SendResult> {
   const tryChannel = async (channel: CommChannel): Promise<SendResult> => {
+    let attempt: SendResult;
     try {
       if (channel === "whatsapp") {
         await sendWhatsAppMessage(client.phone, message);
       } else {
         await sendSmsMessage(client.phone, message);
       }
-      return { channel, status: "sent" };
+      attempt = { channel, status: "sent" };
     } catch (err) {
-      return {
+      attempt = {
         channel,
         status: "failed",
         error: err instanceof Error ? err.message : String(err),
       };
     }
+
+    const { error: logError } = await supabase.from("communication_logs").insert({
+      agent_id: agentId,
+      client_id: client.id,
+      channel: attempt.channel,
+      message_body: message,
+      delivery_status: attempt.status,
+    });
+
+    if (logError) {
+      throw new Error(`message attempt could not be audited: ${logError.message}`);
+    }
+
+    return attempt;
   };
 
   let result: SendResult;
@@ -48,14 +63,6 @@ export async function sendToClient(
       result = await tryChannel("sms");
     }
   }
-
-  await supabase.from("communication_logs").insert({
-    agent_id: agentId,
-    client_id: client.id,
-    channel: result.channel,
-    message_body: message,
-    delivery_status: result.status === "sent" ? "sent" : "failed",
-  });
 
   return result;
 }

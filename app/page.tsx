@@ -1,10 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
+import { logRead } from "@/lib/audit";
 import type { AgentTask, Policy } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 async function getDashboardData() {
-  const supabase = createClient();
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const today = new Date();
   const in30Days = new Date(today);
   in30Days.setDate(today.getDate() + 30);
@@ -23,6 +27,19 @@ async function getDashboardData() {
       .order("due_date", { ascending: true })
       .limit(10),
   ]);
+
+  if (user) {
+    await Promise.all([
+      logRead(supabase, user.id, "policies", undefined, {
+        purpose: "dashboard",
+        record_count: renewalsRes.data?.length ?? 0,
+      }),
+      logRead(supabase, user.id, "tasks", undefined, {
+        purpose: "dashboard",
+        record_count: tasksRes.data?.length ?? 0,
+      }),
+    ]);
+  }
 
   return {
     renewals: renewalsRes.data ?? [],

@@ -23,13 +23,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.WHATSAPP_API_URL}}/sendMessage",
+        "url": "=https://api.green-api.com/waInstance{{$env.GREEN_API_INSTANCE_ID}}/sendMessage/{{$env.GREEN_API_TOKEN}}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
-            { "name": "phone", "value": "={{$json.phone}}" },
+            { "name": "chatId", "value": "={{'972' + $json.phone.replace(/\\D/g, '').replace(/^0/, '') + '@c.us'}}" },
             {
               "name": "message",
               "value": "מזל טוב {{$json.full_name}}! לרגל יום ההולדת שלך, נשמח להציע בדיקה חינמית של התיק הפנסיוני/ביטוחי שלך."
