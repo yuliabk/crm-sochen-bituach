@@ -1,0 +1,69 @@
+{
+  "name": "Client Birthday Greeting",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "days", "daysInterval": 1 }] }
+      },
+      "name": "Daily Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select id, full_name, phone, preferred_channel from clients where status = 'active' and extract(month from birth_date) = extract(month from current_date) and extract(day from birth_date) = extract(day from current_date)"
+      },
+      "name": "Find Today's Birthdays",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.green-api.com/waInstance{{$env.GREEN_API_INSTANCE_ID}}/sendMessage/{{$env.GREEN_API_TOKEN}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "chatId", "value": "={{'972' + $json.phone.replace(/\\D/g, '').replace(/^0/, '') + '@c.us'}}" },
+            {
+              "name": "message",
+              "value": "מזל טוב {{$json.full_name}}! לרגל יום ההולדת שלך, נשמח להציע בדיקה חינמית של התיק הפנסיוני/ביטוחי שלך."
+            }
+          ]
+        }
+      },
+      "name": "Send Birthday Greeting",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 300],
+      "notes": "Falls back to SMS API automatically on failure (Smart Fallback), same as the renewal workflow."
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "communication_logs",
+        "columns": "agent_id,client_id,channel,message_body,delivery_status"
+      },
+      "name": "Write Communication Log",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Daily Trigger": {
+      "main": [[{ "node": "Find Today's Birthdays", "type": "main", "index": 0 }]]
+    },
+    "Find Today's Birthdays": {
+      "main": [[{ "node": "Send Birthday Greeting", "type": "main", "index": 0 }]]
+    },
+    "Send Birthday Greeting": {
+      "main": [[{ "node": "Write Communication Log", "type": "main", "index": 0 }]]
+    }
+  }
+}

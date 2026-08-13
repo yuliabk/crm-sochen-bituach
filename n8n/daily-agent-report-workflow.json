@@ -1,0 +1,72 @@
+{
+  "name": "Daily Agent Morning Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 8 * * *" }] }
+      },
+      "name": "08:00 Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select full_name, renewal_date from policies p join clients c on c.id = p.client_id where p.status = 'active' and p.renewal_date = current_date"
+      },
+      "name": "Renewals Due Today",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [460, 200]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select task_type, due_date from tasks where status in ('open', 'in_progress') and due_date <= current_date"
+      },
+      "name": "Open Tasks",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [460, 400]
+    },
+    {
+      "parameters": {},
+      "name": "Merge Report Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "crm@agency.example",
+        "toEmail": "={{$env.AGENT_EMAIL}}",
+        "subject": "דו\"ח בוקר יומי - {{$today}}",
+        "text": "רשימת חידושים להיום, משימות פתוחות ולידים דחופים מצורפת."
+      },
+      "name": "Email Morning Report",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "08:00 Trigger": {
+      "main": [
+        [
+          { "node": "Renewals Due Today", "type": "main", "index": 0 },
+          { "node": "Open Tasks", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Renewals Due Today": {
+      "main": [[{ "node": "Merge Report Data", "type": "main", "index": 0 }]]
+    },
+    "Open Tasks": {
+      "main": [[{ "node": "Merge Report Data", "type": "main", "index": 1 }]]
+    },
+    "Merge Report Data": {
+      "main": [[{ "node": "Email Morning Report", "type": "main", "index": 0 }]]
+    }
+  }
+}

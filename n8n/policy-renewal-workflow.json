@@ -1,0 +1,129 @@
+{
+  "name": "Policy Renewal Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "days", "daysInterval": 1 }] }
+      },
+      "name": "Daily Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select p.id, p.renewal_date, c.id as client_id, c.full_name, c.phone, c.preferred_channel from policies p join clients c on c.id = p.client_id where p.status = 'active' and p.renewal_date in (current_date + interval '30 days', current_date + interval '10 days')"
+      },
+      "name": "Find Policies Due For Renewal",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "notes": "Connect to the Supabase Postgres instance (session pooler)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            { "value1": "={{$json.preferred_channel}}", "operation": "notEqual", "value2": "sms_only" }
+          ]
+        }
+      },
+      "name": "Prefers WhatsApp?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 220]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.green-api.com/waInstance{{$env.GREEN_API_INSTANCE_ID}}/sendMessage/{{$env.GREEN_API_TOKEN}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "chatId", "value": "={{'972' + $json.phone.replace(/\\D/g, '').replace(/^0/, '') + '@c.us'}}" },
+            {
+              "name": "message",
+              "value": "שלום {{$json.full_name}}, הפוליסה שלך עומדת להתחדש בתאריך {{$json.renewal_date}}. נשמח לעדכן אותך בפרטים."
+            }
+          ]
+        }
+      },
+      "name": "Send WhatsApp Renewal Reminder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [900, 160]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.SMS_PROVIDER_API_URL}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "phone", "value": "={{$json.phone}}" },
+            {
+              "name": "message",
+              "value": "שלום {{$json.full_name}}, הפוליסה שלך עומדת להתחדש בתאריך {{$json.renewal_date}}."
+            }
+          ]
+        }
+      },
+      "name": "Send SMS Fallback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [900, 380],
+      "notes": "Also triggered automatically if the WhatsApp send node fails (Smart Fallback)."
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "communication_logs",
+        "columns": "agent_id,client_id,channel,message_body,delivery_status"
+      },
+      "name": "Write Communication Log",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "table": "policies",
+        "updateKey": "id",
+        "columns": "status"
+      },
+      "name": "Update Policy Status",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    }
+  ],
+  "connections": {
+    "Daily Trigger": {
+      "main": [[{ "node": "Find Policies Due For Renewal", "type": "main", "index": 0 }]]
+    },
+    "Find Policies Due For Renewal": {
+      "main": [[{ "node": "Prefers WhatsApp?", "type": "main", "index": 0 }]]
+    },
+    "Prefers WhatsApp?": {
+      "main": [
+        [{ "node": "Send WhatsApp Renewal Reminder", "type": "main", "index": 0 }],
+        [{ "node": "Send SMS Fallback", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send WhatsApp Renewal Reminder": {
+      "main": [[{ "node": "Write Communication Log", "type": "main", "index": 0 }]]
+    },
+    "Send SMS Fallback": {
+      "main": [[{ "node": "Write Communication Log", "type": "main", "index": 0 }]]
+    },
+    "Write Communication Log": {
+      "main": [[{ "node": "Update Policy Status", "type": "main", "index": 0 }]]
+    }
+  }
+}
