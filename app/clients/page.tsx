@@ -1,18 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Client, ClientStatus, ChannelPreference } from "@/lib/types";
+import type { Client, ClientStatus, PreferredChannel } from "@/lib/types";
 
 const STATUSES: ClientStatus[] = ["active", "lead", "inactive"];
-const CHANNEL_PREFS: ChannelPreference[] = ["auto", "whatsapp_only", "sms_only"];
+const CHANNEL_PREFS: PreferredChannel[] = ["auto", "whatsapp_only", "sms_only"];
 
 interface EditForm {
   full_name: string;
   phone: string;
   email: string;
-  national_id: string;
+  id_number: string;
   birth_date: string;
-  channel_preference: ChannelPreference;
+  preferred_channel: PreferredChannel;
   status: ClientStatus;
   notes: string;
 }
@@ -22,9 +22,9 @@ function toEditForm(client: Client): EditForm {
     full_name: client.full_name,
     phone: client.phone,
     email: client.email ?? "",
-    national_id: client.national_id ?? "",
+    id_number: client.id_number ?? "",
     birth_date: client.birth_date ?? "",
-    channel_preference: client.channel_preference,
+    preferred_channel: client.preferred_channel,
     status: client.status,
     notes: client.notes ?? "",
   };
@@ -34,7 +34,12 @@ export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ full_name: "", phone: "", email: "" });
+  const [form, setForm] = useState({
+    full_name: "",
+    phone: "",
+    email: "",
+    id_number: "",
+  });
   const [submitting, setSubmitting] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -75,7 +80,7 @@ export default function ClientsPage() {
     if (!res.ok) {
       setError(json.error ?? "שגיאה בהוספת לקוח");
     } else {
-      setForm({ full_name: "", phone: "", email: "" });
+      setForm({ full_name: "", phone: "", email: "", id_number: "" });
       await loadClients();
     }
     setSubmitting(false);
@@ -100,7 +105,7 @@ export default function ClientsPage() {
       body: JSON.stringify({
         ...editForm,
         email: editForm.email || null,
-        national_id: editForm.national_id || null,
+        id_number: editForm.id_number || null,
         birth_date: editForm.birth_date || null,
         notes: editForm.notes || null,
       }),
@@ -167,6 +172,13 @@ export default function ClientsPage() {
         />
         <input
           required
+          placeholder="ת&quot;ז"
+          className="w-32 rounded border px-3 py-2"
+          value={form.id_number}
+          onChange={(e) => setForm({ ...form, id_number: e.target.value })}
+        />
+        <input
+          required
           placeholder="טלפון"
           className="flex-1 rounded border px-3 py-2"
           value={form.phone}
@@ -223,9 +235,9 @@ export default function ClientsPage() {
                   <input
                     className="w-32 rounded border px-2 py-1"
                     placeholder="ת&quot;ז"
-                    value={editForm.national_id}
+                    value={editForm.id_number}
                     onChange={(e) =>
-                      setEditForm({ ...editForm, national_id: e.target.value })
+                      setEditForm({ ...editForm, id_number: e.target.value })
                     }
                   />
                   <input
@@ -238,11 +250,11 @@ export default function ClientsPage() {
                   />
                   <select
                     className="rounded border px-2 py-1"
-                    value={editForm.channel_preference}
+                    value={editForm.preferred_channel}
                     onChange={(e) =>
                       setEditForm({
                         ...editForm,
-                        channel_preference: e.target.value as ChannelPreference,
+                        preferred_channel: e.target.value as PreferredChannel,
                       })
                     }
                   >

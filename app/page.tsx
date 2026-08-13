@@ -57,7 +57,7 @@ export default async function DashboardPage() {
             (policy) => (
               <li key={policy.id} className="flex justify-between px-4 py-3">
                 <span>
-                  {policy.clients?.full_name ?? "לקוח"} — {policy.insurance_company}
+                  {policy.clients?.full_name ?? "לקוח"} — {policy.company}
                 </span>
                 <span className="text-sm text-gray-500">
                   {policy.renewal_date}
@@ -85,9 +85,7 @@ export default async function DashboardPage() {
                 <span>
                   {task.clients?.full_name ?? "כללי"} — {task.task_type}
                 </span>
-                <span className="text-sm text-gray-500">
-                  {task.due_date ?? "ללא תאריך"}
-                </span>
+                <span className="text-sm text-gray-500">{task.due_date}</span>
               </li>
             )
           )}

@@ -1,40 +1,30 @@
-export type ChannelPreference = "auto" | "whatsapp_only" | "sms_only";
+export type PreferredChannel = "auto" | "whatsapp_only" | "sms_only";
 export type ClientStatus = "active" | "inactive" | "lead";
 
 export interface Client {
   id: string;
   agent_id: string;
-  national_id: string | null;
+  id_number: string;
   full_name: string;
   phone: string;
   email: string | null;
   birth_date: string | null;
-  channel_preference: ChannelPreference;
+  preferred_channel: PreferredChannel;
   status: ClientStatus;
   notes: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export type InsuranceBranch =
-  | "car"
-  | "home"
-  | "health"
-  | "life"
-  | "pension"
-  | "other";
-export type PolicyStatus =
-  | "active"
-  | "expired"
-  | "cancelled"
-  | "pending_renewal";
+export type PolicyStatus = "active" | "expired" | "cancelled" | "pending_renewal";
 
 export interface Policy {
   id: string;
   agent_id: string;
   client_id: string;
-  insurance_company: string;
-  branch: InsuranceBranch;
+  policy_number: string;
+  company: string;
+  insurance_type: string;
   start_date: string;
   renewal_date: string;
   monthly_premium: number;
@@ -43,32 +33,31 @@ export interface Policy {
   updated_at: string;
 }
 
-export type TaskType = "renewal" | "claim" | "quote" | "birthday" | "other";
-export type TaskStatus = "open" | "in_progress" | "done" | "cancelled";
-export type TaskPriority = "low" | "medium" | "high" | "urgent";
+export type TaskPriority = "high" | "medium" | "low";
+export type TaskStatus = "open" | "in_progress" | "completed";
 
 export interface AgentTask {
   id: string;
   agent_id: string;
   client_id: string | null;
-  task_type: TaskType;
-  due_date: string | null;
-  status: TaskStatus;
+  task_type: string;
+  due_date: string;
   priority: TaskPriority;
-  notes: string | null;
+  status: TaskStatus;
+  description: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export type CommChannel = "whatsapp" | "sms";
-export type SendStatus = "queued" | "sent" | "delivered" | "failed";
+export type DeliveryStatus = "sent" | "delivered" | "failed";
 
-export interface CommLog {
+export interface CommunicationLog {
   id: string;
   agent_id: string;
   client_id: string;
   channel: CommChannel;
-  message_content: string;
-  send_status: SendStatus;
-  sent_at: string;
+  message_body: string;
+  delivery_status: DeliveryStatus;
+  created_at: string;
 }

@@ -1,5 +1,8 @@
 -- CRM for insurance agents: core schema + Row-Level Security
--- Entities: agents (owners of data), clients, policies, tasks, logs
+-- Table/column names follow the project's dev-instructions doc (schema.sql
+-- section) so that doc's seed.sql / Python import scripts work unmodified.
+-- Multi-tenancy (agent_id + RLS) is layered on top so the same schema can
+-- later support more than one agent, not just the single MVP user.
 
 create extension if not exists "pgcrypto";
 
@@ -19,33 +22,34 @@ alter table agents enable row level security;
 
 create policy "agents_select_own" on agents
   for select using (id = auth.uid());
-
 create policy "agents_update_own" on agents
   for update using (id = auth.uid());
 
 -- ---------------------------------------------------------------------------
 -- clients
 -- ---------------------------------------------------------------------------
-create type channel_preference as enum ('auto', 'whatsapp_only', 'sms_only');
-create type client_status as enum ('active', 'inactive', 'lead');
-
 create table if not exists clients (
   id uuid primary key default gen_random_uuid(),
   agent_id uuid not null references agents (id) on delete cascade,
-  national_id text,
-  full_name text not null,
-  phone text not null,
-  email text,
-  birth_date date,
-  channel_preference channel_preference not null default 'auto',
-  status client_status not null default 'active',
-  notes text,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  id_number varchar(20) not null,
+  full_name varchar(100) not null,
+  phone varchar(20) not null,
+  email varchar(100),
+  birth_date date,
+  preferred_channel varchar(20) not null default 'auto'
+    check (preferred_channel in ('auto', 'whatsapp_only', 'sms_only')),
+  status varchar(20) not null default 'active'
+    check (status in ('active', 'inactive', 'lead')),
+  notes text,
+  -- unique per agent, not globally: the same id_number may legitimately
+  -- belong to different agents' client books.
+  unique (agent_id, id_number)
 );
 
-create index if not exists clients_agent_id_idx on clients (agent_id);
-create index if not exists clients_birth_date_idx on clients (birth_date);
+create index if not exists idx_clients_agent_id on clients (agent_id);
+create index if not exists idx_clients_phone on clients (phone);
 
 alter table clients enable row level security;
 
@@ -61,26 +65,25 @@ create policy "clients_delete_own" on clients
 -- ---------------------------------------------------------------------------
 -- policies (insurance policies)
 -- ---------------------------------------------------------------------------
-create type insurance_branch as enum ('car', 'home', 'health', 'life', 'pension', 'other');
-create type policy_status as enum ('active', 'expired', 'cancelled', 'pending_renewal');
-
 create table if not exists policies (
   id uuid primary key default gen_random_uuid(),
   agent_id uuid not null references agents (id) on delete cascade,
-  client_id uuid not null references clients (id) on delete cascade,
-  insurance_company text not null,
-  branch insurance_branch not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  client_id uuid references clients (id) on delete cascade,
+  policy_number varchar(50) not null,
+  company varchar(50) not null, -- הפניקס, הראל, מגדל, כלל, מנורה, אלטשולר...
+  insurance_type varchar(50) not null, -- רכב, דירה, בריאות, חיים, פנסיה, מנהלים...
   start_date date not null,
   renewal_date date not null,
-  monthly_premium numeric(12, 2) not null default 0,
-  status policy_status not null default 'active',
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  monthly_premium decimal(10, 2),
+  status varchar(20) not null default 'active'
+    check (status in ('active', 'expired', 'cancelled', 'pending_renewal'))
 );
 
-create index if not exists policies_agent_id_idx on policies (agent_id);
-create index if not exists policies_client_id_idx on policies (client_id);
-create index if not exists policies_renewal_date_idx on policies (renewal_date);
+create index if not exists idx_policies_agent_id on policies (agent_id);
+create index if not exists idx_policies_client_id on policies (client_id);
+create index if not exists idx_policies_renewal_date on policies (renewal_date);
 
 alter table policies enable row level security;
 
@@ -94,28 +97,25 @@ create policy "policies_delete_own" on policies
   for delete using (agent_id = auth.uid());
 
 -- ---------------------------------------------------------------------------
--- tasks
+-- tasks (מעקבים)
 -- ---------------------------------------------------------------------------
-create type task_type as enum ('renewal', 'claim', 'quote', 'birthday', 'other');
-create type task_status as enum ('open', 'in_progress', 'done', 'cancelled');
-create type task_priority as enum ('low', 'medium', 'high', 'urgent');
-
 create table if not exists tasks (
   id uuid primary key default gen_random_uuid(),
   agent_id uuid not null references agents (id) on delete cascade,
-  client_id uuid references clients (id) on delete cascade,
-  task_type task_type not null default 'other',
-  due_date date,
-  status task_status not null default 'open',
-  priority task_priority not null default 'medium',
-  notes text,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  client_id uuid references clients (id) on delete cascade,
+  task_type varchar(50) not null, -- חידוש, תביעה, הצעת מחיר, יום הולדת, עדכון מסמכים...
+  due_date date not null,
+  priority varchar(20) not null default 'medium'
+    check (priority in ('high', 'medium', 'low')),
+  status varchar(20) not null default 'open'
+    check (status in ('open', 'in_progress', 'completed')),
+  description text
 );
 
-create index if not exists tasks_agent_id_idx on tasks (agent_id);
-create index if not exists tasks_due_date_idx on tasks (due_date);
-create index if not exists tasks_status_idx on tasks (status);
+create index if not exists idx_tasks_agent_id on tasks (agent_id);
+create index if not exists idx_tasks_due_date on tasks (due_date);
 
 alter table tasks enable row level security;
 
@@ -129,34 +129,31 @@ create policy "tasks_delete_own" on tasks
   for delete using (agent_id = auth.uid());
 
 -- ---------------------------------------------------------------------------
--- logs (communication log - append-only, audit trail for WhatsApp/SMS sends)
+-- communication_logs (יומן תקשורת) - append-only audit trail
 -- ---------------------------------------------------------------------------
-create type comm_channel as enum ('whatsapp', 'sms');
-create type send_status as enum ('queued', 'sent', 'delivered', 'failed');
-
-create table if not exists logs (
+create table if not exists communication_logs (
   id uuid primary key default gen_random_uuid(),
   agent_id uuid not null references agents (id) on delete cascade,
+  created_at timestamptz not null default now(),
   client_id uuid not null references clients (id) on delete cascade,
-  channel comm_channel not null,
-  message_content text not null,
-  send_status send_status not null default 'queued',
-  sent_at timestamptz not null default now()
+  channel varchar(20) not null check (channel in ('whatsapp', 'sms')),
+  message_body text not null,
+  delivery_status varchar(20) not null default 'sent'
+    check (delivery_status in ('sent', 'delivered', 'failed'))
 );
 
-create index if not exists logs_agent_id_idx on logs (agent_id);
-create index if not exists logs_client_id_idx on logs (client_id);
-create index if not exists logs_sent_at_idx on logs (sent_at);
+create index if not exists idx_communication_logs_agent_id on communication_logs (agent_id);
+create index if not exists idx_communication_logs_client_id on communication_logs (client_id);
 
-alter table logs enable row level security;
+alter table communication_logs enable row level security;
 
-create policy "logs_select_own" on logs
+create policy "communication_logs_select_own" on communication_logs
   for select using (agent_id = auth.uid());
-create policy "logs_insert_own" on logs
+create policy "communication_logs_insert_own" on communication_logs
   for insert with check (agent_id = auth.uid());
 
--- logs are append-only: no update/delete policy is defined, so those
--- operations are denied by default under RLS (audit trail requirement).
+-- communication_logs is append-only: no update/delete policy is defined,
+-- so those operations are denied by default under RLS (audit requirement).
 
 -- ---------------------------------------------------------------------------
 -- updated_at trigger helper

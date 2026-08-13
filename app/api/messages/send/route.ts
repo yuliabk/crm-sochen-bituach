@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
   const { data: client, error: clientError } = await supabase
     .from("clients")
-    .select("id, phone, channel_preference")
+    .select("id, phone, preferred_channel")
     .eq("id", client_id)
     .single();
 

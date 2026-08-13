@@ -13,7 +13,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "select id, full_name, phone, channel_preference from clients where status = 'active' and extract(month from birth_date) = extract(month from current_date) and extract(day from birth_date) = extract(day from current_date)"
+        "query": "select id, full_name, phone, preferred_channel from clients where status = 'active' and extract(month from birth_date) = extract(month from current_date) and extract(day from birth_date) = extract(day from current_date)"
       },
       "name": "Find Today's Birthdays",
       "type": "n8n-nodes-base.postgres",
@@ -46,8 +46,8 @@
     {
       "parameters": {
         "operation": "insert",
-        "table": "logs",
-        "columns": "agent_id,client_id,channel,message_content,send_status"
+        "table": "communication_logs",
+        "columns": "agent_id,client_id,channel,message_body,delivery_status"
       },
       "name": "Write Communication Log",
       "type": "n8n-nodes-base.postgres",

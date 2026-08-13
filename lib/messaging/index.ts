@@ -13,12 +13,12 @@ interface SendResult {
  * Sends a message to a client following the Dual-Channel Architecture from
  * the spec: WhatsApp is the primary channel, with an automatic fallback to
  * SMS when the client prefers SMS-only or the WhatsApp send fails. Every
- * attempt is recorded in `logs` (append-only audit trail).
+ * attempt is recorded in `communication_logs` (append-only audit trail).
  */
 export async function sendToClient(
   supabase: SupabaseClient,
   agentId: string,
-  client: Pick<Client, "id" | "phone" | "channel_preference">,
+  client: Pick<Client, "id" | "phone" | "preferred_channel">,
   message: string
 ): Promise<SendResult> {
   const tryChannel = async (channel: CommChannel): Promise<SendResult> => {
@@ -40,21 +40,21 @@ export async function sendToClient(
 
   let result: SendResult;
 
-  if (client.channel_preference === "sms_only") {
+  if (client.preferred_channel === "sms_only") {
     result = await tryChannel("sms");
   } else {
     result = await tryChannel("whatsapp");
-    if (result.status === "failed" && client.channel_preference !== "whatsapp_only") {
+    if (result.status === "failed" && client.preferred_channel !== "whatsapp_only") {
       result = await tryChannel("sms");
     }
   }
 
-  await supabase.from("logs").insert({
+  await supabase.from("communication_logs").insert({
     agent_id: agentId,
     client_id: client.id,
     channel: result.channel,
-    message_content: message,
-    send_status: result.status === "sent" ? "sent" : "failed",
+    message_body: message,
+    delivery_status: result.status === "sent" ? "sent" : "failed",
   });
 
   return result;

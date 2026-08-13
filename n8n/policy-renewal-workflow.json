@@ -13,7 +13,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "select p.id, p.renewal_date, c.id as client_id, c.full_name, c.phone, c.channel_preference from policies p join clients c on c.id = p.client_id where p.status = 'active' and p.renewal_date in (current_date + interval '30 days', current_date + interval '10 days')"
+        "query": "select p.id, p.renewal_date, c.id as client_id, c.full_name, c.phone, c.preferred_channel from policies p join clients c on c.id = p.client_id where p.status = 'active' and p.renewal_date in (current_date + interval '30 days', current_date + interval '10 days')"
       },
       "name": "Find Policies Due For Renewal",
       "type": "n8n-nodes-base.postgres",
@@ -25,7 +25,7 @@
       "parameters": {
         "conditions": {
           "string": [
-            { "value1": "={{$json.channel_preference}}", "operation": "notEqual", "value2": "sms_only" }
+            { "value1": "={{$json.preferred_channel}}", "operation": "notEqual", "value2": "sms_only" }
           ]
         }
       },
@@ -82,8 +82,8 @@
     {
       "parameters": {
         "operation": "insert",
-        "table": "logs",
-        "columns": "agent_id,client_id,channel,message_content,send_status"
+        "table": "communication_logs",
+        "columns": "agent_id,client_id,channel,message_body,delivery_status"
       },
       "name": "Write Communication Log",
       "type": "n8n-nodes-base.postgres",

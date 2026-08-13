@@ -1,16 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Client, InsuranceBranch, Policy, PolicyStatus } from "@/lib/types";
+import type { Client, Policy, PolicyStatus } from "@/lib/types";
 
-const BRANCHES: InsuranceBranch[] = [
-  "car",
-  "home",
-  "health",
-  "life",
-  "pension",
-  "other",
-];
 const STATUSES: PolicyStatus[] = [
   "active",
   "pending_renewal",
@@ -22,8 +14,9 @@ type PolicyWithClient = Policy & { clients: { full_name: string } | null };
 
 const emptyForm = {
   client_id: "",
-  insurance_company: "",
-  branch: "car" as InsuranceBranch,
+  policy_number: "",
+  company: "",
+  insurance_type: "",
   start_date: "",
   renewal_date: "",
   monthly_premium: "",
@@ -31,13 +24,20 @@ const emptyForm = {
 
 type EditForm = Pick<
   Policy,
-  "insurance_company" | "branch" | "start_date" | "renewal_date" | "monthly_premium" | "status"
+  | "policy_number"
+  | "company"
+  | "insurance_type"
+  | "start_date"
+  | "renewal_date"
+  | "monthly_premium"
+  | "status"
 >;
 
 function toEditForm(policy: Policy): EditForm {
   return {
-    insurance_company: policy.insurance_company,
-    branch: policy.branch,
+    policy_number: policy.policy_number,
+    company: policy.company,
+    insurance_type: policy.insurance_type,
     start_date: policy.start_date,
     renewal_date: policy.renewal_date,
     monthly_premium: policy.monthly_premium,
@@ -160,26 +160,27 @@ export default function PoliciesPage() {
         </select>
         <input
           required
+          placeholder="מספר פוליסה"
+          className="w-32 rounded border px-3 py-2"
+          value={form.policy_number}
+          onChange={(e) => setForm({ ...form, policy_number: e.target.value })}
+        />
+        <input
+          required
           placeholder="חברת ביטוח"
           className="flex-1 rounded border px-3 py-2"
-          value={form.insurance_company}
+          value={form.company}
+          onChange={(e) => setForm({ ...form, company: e.target.value })}
+        />
+        <input
+          required
+          placeholder="סוג ביטוח (רכב, דירה, בריאות...)"
+          className="flex-1 rounded border px-3 py-2"
+          value={form.insurance_type}
           onChange={(e) =>
-            setForm({ ...form, insurance_company: e.target.value })
+            setForm({ ...form, insurance_type: e.target.value })
           }
         />
-        <select
-          className="rounded border px-3 py-2"
-          value={form.branch}
-          onChange={(e) =>
-            setForm({ ...form, branch: e.target.value as InsuranceBranch })
-          }
-        >
-          {BRANCHES.map((b) => (
-            <option key={b} value={b}>
-              {b}
-            </option>
-          ))}
-        </select>
         <input
           required
           type="date"
@@ -224,29 +225,29 @@ export default function PoliciesPage() {
               {editingId === policy.id && editForm ? (
                 <div className="flex flex-wrap items-center gap-2">
                   <input
-                    className="flex-1 rounded border px-2 py-1"
-                    placeholder="חברת ביטוח"
-                    value={editForm.insurance_company}
+                    className="w-32 rounded border px-2 py-1"
+                    placeholder="מספר פוליסה"
+                    value={editForm.policy_number}
                     onChange={(e) =>
-                      setEditForm({ ...editForm, insurance_company: e.target.value })
+                      setEditForm({ ...editForm, policy_number: e.target.value })
                     }
                   />
-                  <select
-                    className="rounded border px-2 py-1"
-                    value={editForm.branch}
+                  <input
+                    className="flex-1 rounded border px-2 py-1"
+                    placeholder="חברת ביטוח"
+                    value={editForm.company}
                     onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        branch: e.target.value as InsuranceBranch,
-                      })
+                      setEditForm({ ...editForm, company: e.target.value })
                     }
-                  >
-                    {BRANCHES.map((b) => (
-                      <option key={b} value={b}>
-                        {b}
-                      </option>
-                    ))}
-                  </select>
+                  />
+                  <input
+                    className="flex-1 rounded border px-2 py-1"
+                    placeholder="סוג ביטוח"
+                    value={editForm.insurance_type}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, insurance_type: e.target.value })
+                    }
+                  />
                   <input
                     type="date"
                     className="rounded border px-2 py-1"
@@ -306,8 +307,8 @@ export default function PoliciesPage() {
               ) : (
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span>
-                    {policy.clients?.full_name ?? "לקוח"} — {policy.insurance_company} (
-                    {policy.branch})
+                    {policy.clients?.full_name ?? "לקוח"} — {policy.company} (
+                    {policy.insurance_type}) #{policy.policy_number}
                   </span>
                   <div className="flex items-center gap-3 text-sm text-gray-500">
                     <span>חידוש: {policy.renewal_date}</span>

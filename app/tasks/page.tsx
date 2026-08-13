@@ -1,31 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type {
-  AgentTask,
-  Client,
-  TaskPriority,
-  TaskStatus,
-  TaskType,
-} from "@/lib/types";
+import type { AgentTask, Client, TaskPriority, TaskStatus } from "@/lib/types";
 
-const TASK_TYPES: TaskType[] = ["renewal", "claim", "quote", "birthday", "other"];
-const PRIORITIES: TaskPriority[] = ["low", "medium", "high", "urgent"];
-const STATUSES: TaskStatus[] = ["open", "in_progress", "done", "cancelled"];
+const PRIORITIES: TaskPriority[] = ["high", "medium", "low"];
+const STATUSES: TaskStatus[] = ["open", "in_progress", "completed"];
 
 type TaskWithClient = AgentTask & { clients: { full_name: string } | null };
 
 const emptyForm = {
   client_id: "",
-  task_type: "other" as TaskType,
+  task_type: "",
   due_date: "",
   priority: "medium" as TaskPriority,
-  notes: "",
+  description: "",
 };
 
 type EditForm = Pick<
   AgentTask,
-  "task_type" | "due_date" | "priority" | "status" | "notes"
+  "task_type" | "due_date" | "priority" | "status" | "description"
 >;
 
 function toEditForm(task: AgentTask): EditForm {
@@ -34,7 +27,7 @@ function toEditForm(task: AgentTask): EditForm {
     due_date: task.due_date,
     priority: task.priority,
     status: task.status,
-    notes: task.notes,
+    description: task.description,
   };
 }
 
@@ -81,7 +74,6 @@ export default function TasksPage() {
       body: JSON.stringify({
         ...form,
         client_id: form.client_id || null,
-        due_date: form.due_date || null,
       }),
     });
     const json = await res.json();
@@ -112,8 +104,7 @@ export default function TasksPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...editForm,
-        due_date: editForm.due_date || null,
-        notes: editForm.notes || null,
+        description: editForm.description || null,
       }),
     });
     setSavingEdit(false);
@@ -152,20 +143,15 @@ export default function TasksPage() {
             </option>
           ))}
         </select>
-        <select
-          className="rounded border px-3 py-2"
-          value={form.task_type}
-          onChange={(e) =>
-            setForm({ ...form, task_type: e.target.value as TaskType })
-          }
-        >
-          {TASK_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
         <input
+          required
+          placeholder="סוג משימה (חידוש, תביעה, הצעת מחיר...)"
+          className="flex-1 rounded border px-3 py-2"
+          value={form.task_type}
+          onChange={(e) => setForm({ ...form, task_type: e.target.value })}
+        />
+        <input
+          required
           type="date"
           className="rounded border px-3 py-2"
           value={form.due_date}
@@ -185,10 +171,10 @@ export default function TasksPage() {
           ))}
         </select>
         <input
-          placeholder="הערות"
+          placeholder="תיאור"
           className="flex-1 rounded border px-3 py-2"
-          value={form.notes}
-          onChange={(e) => setForm({ ...form, notes: e.target.value })}
+          value={form.description}
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
         />
         <button
           type="submit"
@@ -208,26 +194,18 @@ export default function TasksPage() {
             <li key={task.id} className="px-4 py-3">
               {editingId === task.id && editForm ? (
                 <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    className="rounded border px-2 py-1"
+                  <input
+                    className="flex-1 rounded border px-2 py-1"
+                    placeholder="סוג משימה"
                     value={editForm.task_type}
                     onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        task_type: e.target.value as TaskType,
-                      })
+                      setEditForm({ ...editForm, task_type: e.target.value })
                     }
-                  >
-                    {TASK_TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
+                  />
                   <input
                     type="date"
                     className="rounded border px-2 py-1"
-                    value={editForm.due_date ?? ""}
+                    value={editForm.due_date}
                     onChange={(e) =>
                       setEditForm({ ...editForm, due_date: e.target.value })
                     }
@@ -266,10 +244,10 @@ export default function TasksPage() {
                   </select>
                   <input
                     className="min-w-[10rem] flex-1 rounded border px-2 py-1"
-                    placeholder="הערות"
-                    value={editForm.notes ?? ""}
+                    placeholder="תיאור"
+                    value={editForm.description ?? ""}
                     onChange={(e) =>
-                      setEditForm({ ...editForm, notes: e.target.value })
+                      setEditForm({ ...editForm, description: e.target.value })
                     }
                   />
                   <button
@@ -289,7 +267,7 @@ export default function TasksPage() {
                     {task.clients?.full_name ?? "כללי"} — {task.task_type}
                   </span>
                   <div className="flex items-center gap-3 text-sm text-gray-500">
-                    <span>{task.due_date ?? "ללא תאריך"}</span>
+                    <span>{task.due_date}</span>
                     <span>{task.priority}</span>
                     <span>{task.status}</span>
                     <button
